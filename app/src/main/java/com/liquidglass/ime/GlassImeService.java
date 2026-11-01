@@ -3,6 +3,7 @@ package com.liquidglass.ime;
 import android.content.*;
 import android.content.res.*;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.graphics.drawable.RippleDrawable;
 import android.inputmethodservice.InputMethodService;
 import android.os.*;
@@ -36,7 +37,7 @@ public final class GlassImeService extends InputMethodService {
     private List<PinyinEngine.Candidate> candidates=Collections.emptyList();
     private final List<TextView> chips=new ArrayList<>();
     @Override public void onCreate(){
-        setTheme(R.style.ImeTheme);super.onCreate();prefs=getSharedPreferences("glass",MODE_PRIVATE);nine=prefs.getBoolean("nine",false);
+        setTheme(R.style.ImeTheme);super.onCreate();prefs=getSharedPreferences("glass",MODE_PRIVATE);nine=prefs.getBoolean("nine",true);
         workerThread.start();worker=new Handler(workerThread.getLooper());
         worker.post(()->{
             try(AssetFileDescriptor fd=getAssets().openFd("dictionary.bin");FileInputStream stream=fd.createInputStream()){
@@ -66,7 +67,7 @@ public final class GlassImeService extends InputMethodService {
         keys=new LinearLayout(this);keys.setOrientation(LinearLayout.VERTICAL);dock.addView(keys);rebuildKeys();updateCandidates();blur=new BlurController(this,getWindow().getWindow(),dock);return dock;
     }
     @Override public void onStartInput(EditorInfo info,boolean restarting){
-        super.onStartInput(info,restarting);resetComposition();shifted=false;nine=prefs.getBoolean("nine",false);
+        super.onStartInput(info,restarting);resetComposition();shifted=false;nine=prefs.getBoolean("nine",true);
         int cls=info.inputType&InputType.TYPE_MASK_CLASS,variation=info.inputType&InputType.TYPE_MASK_VARIATION;
         sensitive=(cls==InputType.TYPE_CLASS_TEXT&&(variation==InputType.TYPE_TEXT_VARIATION_PASSWORD||variation==InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD||variation==InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD))||(cls==InputType.TYPE_CLASS_NUMBER&&variation==InputType.TYPE_NUMBER_VARIATION_PASSWORD);
         personalized=!sensitive&&(info.imeOptions&EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING)==0;
@@ -77,7 +78,7 @@ public final class GlassImeService extends InputMethodService {
         worker.post(()->{if(engine!=null)try{LearningStore.load(this,engine);}catch(IOException e){engine.clearLearning();}});
         if(keys!=null){rebuildKeys();updateCandidates();}
     }
-    @Override public void onStartInputView(EditorInfo info,boolean restarting){super.onStartInputView(info,restarting);boolean savedNine=prefs.getBoolean("nine",false);if(savedNine!=nine){if(composing.length()>0)commitRaw();nine=savedNine;if(keys!=null)rebuildKeys();}if(dock!=null)updateCandidates();if(blur!=null)blur.apply();}
+    @Override public void onStartInputView(EditorInfo info,boolean restarting){super.onStartInputView(info,restarting);boolean savedNine=prefs.getBoolean("nine",true);if(savedNine!=nine){if(composing.length()>0)commitRaw();nine=savedNine;if(keys!=null)rebuildKeys();}if(dock!=null)updateCandidates();if(blur!=null)blur.apply();}
     @Override public void onFinishInput(){InputConnection ic=getCurrentInputConnection();if(ic!=null)ic.finishComposingText();resetComposition();if(dock!=null)updateCandidates();super.onFinishInput();}
     @Override public void onUpdateSelection(int a,int b,int start,int end,int cs,int ce){super.onUpdateSelection(a,b,start,end,cs,ce);if(composing.length()>0&&(start!=ce||end!=ce)){resetComposition();InputConnection ic=getCurrentInputConnection();if(ic!=null)ic.finishComposingText();if(dock!=null)updateCandidates();}}
     @Override public void onDestroy(){destroyed=true;if(blur!=null)blur.close();workerThread.quitSafely();main.removeCallbacksAndMessages(null);super.onDestroy();}
@@ -89,23 +90,102 @@ public final class GlassImeService extends InputMethodService {
     private boolean t9Active(){return chinese&&nine&&!symbols&&!sensitive;}
     private void dispatch(Runnable action){if(waitingForChoice)deferred.add(action);else action.run();}
     private void rebuildKeys(){
-        keys.removeAllViews();emojiPanel=false;expanded=false;updateExpandButton();boolean t9=t9Active();
-        if(t9){
-            String[][] labels={{"分词","2 ABC","3 DEF"},{"4 GHI","5 JKL","6 MNO"},{"7 PQRS","8 TUV","9 WXYZ"}};
-            for(int r=0;r<3;r++){LinearLayout row=row();for(int c=0;c<3;c++){int digit=r*3+c+1;String label=labels[r][c];addKey(row,label,0,label,2,false,()->type(digit==1?"'":Integer.toString(digit)),true);}
-                if(r==0)addKey(row,"",R.drawable.ic_backspace,"删除",1,false,this::delete,true);
-                if(r==1)addKey(row,"清空",0,"清空拼音",1,false,()->{composing.setLength(0);acceptedText.setLength(0);acceptedSpelling.setLength(0);InputConnection ic=getCurrentInputConnection();if(ic!=null)ic.setComposingText("",1);updateCandidates();},false);
-                if(r==2)addKey(row,"选字",0,"选择首个候选词",1,false,this::space,false);keys.addView(row);}
-        }else{
-            String[] rows=symbols?new String[]{"1234567890","@#$%&*()-","!?/;:'\""}:new String[]{"qwertyuiop","asdfghjkl","zxcvbnm"};
-            for(int r=0;r<3;r++){LinearLayout row=row();if(r==1)row.setPadding(dp(16),0,dp(16),0);if(r==2)addKey(row,"",R.drawable.ic_shift,"大写切换",1.3f,false,()->{shifted=!shifted;rebuildKeys();},false);
-                for(char c:rows[r].toCharArray()){String value=shifted&&!symbols?String.valueOf(c).toUpperCase(Locale.ROOT):String.valueOf(c);addKey(row,value,0,value,1,false,()->type(value),true);}
-                if(r==2)addKey(row,"",R.drawable.ic_backspace,"删除",1.3f,false,this::delete,true);keys.addView(row);}
-        }
+        keys.removeAllViews();emojiPanel=false;expanded=false;updateExpandButton();
+        if(t9Active()){buildT9();return;}
+        String[] rows=symbols?new String[]{"1234567890","@#$%&*()-","!?/;:'\""}:new String[]{"qwertyuiop","asdfghjkl","zxcvbnm"};
+        for(int r=0;r<3;r++){LinearLayout row=row();if(r==1)row.setPadding(dp(16),0,dp(16),0);if(r==2)addKey(row,"",R.drawable.ic_shift,"大写切换",1.3f,false,()->{shifted=!shifted;rebuildKeys();},false);
+            for(char c:rows[r].toCharArray()){String value=shifted&&!symbols?String.valueOf(c).toUpperCase(Locale.ROOT):String.valueOf(c);addKey(row,value,0,value,1,false,()->type(value),true);}
+            if(r==2)addKey(row,"",R.drawable.ic_backspace,"删除",1.3f,false,this::delete,true);keys.addView(row);}
         LinearLayout bottom=row();addKey(bottom,symbols?"ABC":"123",0,"数字符号切换",1.2f,false,()->{commitRaw();symbols=!symbols;rebuildKeys();},false);
         View globe=addKey(bottom,"",R.drawable.ic_globe,"切换中英文，长按选择输入法",1,false,()->{commitRaw();chinese=!chinese;rebuildKeys();updateCandidates();},false);globe.setOnLongClickListener(v->{getSystemService(InputMethodManager.class).showInputMethodPicker();return true;});
-        addKey(bottom,",",0,"逗号",.8f,false,()->punctuation(chinese?"，":","),false);addKey(bottom,chinese?(nine?"中文 · 九宫":"中文"):"English",0,"空格，拼音时选择首个候选词",3.7f,false,this::space,true);
+        addKey(bottom,",",0,"逗号",.8f,false,()->punctuation(chinese?"，":","),false);addKey(bottom,chinese?"中文":"English",0,"空格，拼音时选择首个候选词",3.7f,false,this::space,true);
         addKey(bottom,".",0,"句号",.8f,false,()->punctuation(chinese?"。":"."),false);addKey(bottom,"",R.drawable.ic_enter,"回车",1.5f,true,this::enter,false);keys.addView(bottom);
+    }
+    // ---------- 九宫格 · 微信式布局 ----------
+    private int t9Row(){return getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE?44:56;}
+    private RippleDrawable solidKey(boolean accent){return new RippleDrawable(ColorStateList.valueOf(0x5581D8B8),GlassStyle.surface(accent?GlassStyle.MINT:0x1FFFFFFF,dp(11),accent?0:0x28FFFFFF),null);}
+    private RippleDrawable softKey(){return new RippleDrawable(ColorStateList.valueOf(0x5581D8B8),GlassStyle.surface(0x14FFFFFF,dp(10),0x1FFFFFFF),null);}
+    private View finishKey(View view,String desc,Runnable action,boolean onDown,Runnable longPress){
+        view.setContentDescription(desc);view.setClickable(true);view.setFocusable(true);
+        view.setOnClickListener(v->dispatch(()->{haptic(v);action.run();}));
+        if(onDown){
+            final boolean[] held={false};
+            view.setOnTouchListener((v,event)->{switch(event.getActionMasked()){
+                case MotionEvent.ACTION_DOWN:
+                    v.setPressed(true);v.drawableHotspotChanged(event.getX(),event.getY());haptic(v);held[0]=true;
+                    if(longPress!=null)v.postDelayed(()->{if(held[0]){held[0]=false;dispatch(longPress);}},450);
+                    dispatch(action);return true;
+                case MotionEvent.ACTION_UP:case MotionEvent.ACTION_CANCEL:v.setPressed(false);held[0]=false;return true;
+                default:return true;}});
+        }else if(longPress!=null){
+            view.setLongClickable(true);view.setOnLongClickListener(v->{haptic(v);longPress.run();return true;});
+        }
+        return view;
+    }
+    private View t9Text(String label,int size,boolean accent,Runnable action,Runnable longPress){
+        TextView t=text(label,size);t.setTextColor(accent?0xFF122A24:GlassStyle.INK);t.setBackground(accent?solidKey(true):softKey());
+        return finishKey(t,label,action,false,longPress);
+    }
+    private View t9Letter(String letters,String digit,Runnable action){
+        FrameLayout frame=new FrameLayout(this);frame.setBackground(solidKey(false));
+        TextView main=text(letters,20);main.setTypeface(Typeface.DEFAULT_BOLD);
+        frame.addView(main,new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT));
+        TextView sup=text(digit,9);sup.setTextColor(0x8CE8F3F1);sup.setGravity(Gravity.TOP|Gravity.END);sup.setPadding(0,dp(3),dp(6),0);
+        frame.addView(sup,new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT));
+        return finishKey(frame,letters+" 数字键 "+digit,action,true,null);
+    }
+    private View t9Icon(int res,String desc,Runnable action,Runnable longPress){
+        View v=icon(res,desc);v.setBackground(softKey());
+        return finishKey(v,desc,action,true,longPress);
+    }
+    private void addT9Bottom(LinearLayout row,String label,float weight,boolean accent,Runnable action,Runnable longPress,String desc){
+        View key=t9Text(label,label.length()>1?15:20,accent,action,longPress);key.setContentDescription(desc);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.MATCH_PARENT,weight);lp.setMargins(dp(3),0,dp(3),0);row.addView(key,lp);
+    }
+    private void buildT9(){
+        int h=dp(t9Row()),gap=dp(3);
+        LinearLayout area=new LinearLayout(this);area.setOrientation(LinearLayout.HORIZONTAL);
+        area.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,3*h+6*gap));
+
+        LinearLayout marks=new LinearLayout(this);marks.setOrientation(LinearLayout.VERTICAL);
+        area.addView(marks,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.MATCH_PARENT,1.6f));
+        String[] markKeys={"，","。","？"};
+        for(String mark:markKeys){
+            View key=t9Text(mark,22,false,()->punctuation(mark),null);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,h);lp.setMargins(gap,gap,gap,gap);marks.addView(key,lp);
+        }
+
+        LinearLayout grid=new LinearLayout(this);grid.setOrientation(LinearLayout.VERTICAL);
+        area.addView(grid,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.MATCH_PARENT,6f));
+        String[][] letters={{"@#","ABC","DEF"},{"GHI","JKL","MNO"},{"PQRS","TUV","WXYZ"}};
+        String[][] digits={{"","2","3"},{"4","5","6"},{"7","8","9"}};
+        for(int r=0;r<3;r++){
+            LinearLayout line=new LinearLayout(this);line.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams lineLp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,h);lineLp.setMargins(0,gap,0,gap);grid.addView(line,lineLp);
+            for(int c=0;c<3;c++){
+                final String digit=digits[r][c];
+                View key=(r==0&&c==0)?t9Text("@#",18,false,()->{commitRaw();symbols=true;rebuildKeys();},null):t9Letter(letters[r][c],digit,()->type(digit));
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.MATCH_PARENT,1f);lp.setMargins(gap,0,gap,0);line.addView(key,lp);
+            }
+        }
+
+        LinearLayout side=new LinearLayout(this);side.setOrientation(LinearLayout.VERTICAL);
+        area.addView(side,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.MATCH_PARENT,2.1f));
+        View delete=t9Icon(R.drawable.ic_backspace,"删除，长按清空拼音",this::delete,this::clearComposing);
+        LinearLayout.LayoutParams dlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,h);dlp.setMargins(gap,gap,gap,gap);side.addView(delete,dlp);
+        View enter=t9Text("换行",16,false,this::enter,null);
+        LinearLayout.LayoutParams elp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,2*h+2*gap);elp.setMargins(gap,gap,gap,gap);side.addView(enter,elp);
+        keys.addView(area);
+
+        LinearLayout bottom=new LinearLayout(this);bottom.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams blp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,h);blp.setMargins(0,gap,0,0);bottom.setLayoutParams(blp);
+        keys.addView(bottom);
+        addT9Bottom(bottom,"！",1.6f,false,()->punctuation("！"),null,"感叹号");
+        addT9Bottom(bottom,"符号",1.7f,false,this::showPunctuation,null,"中文标点");
+        addT9Bottom(bottom,"123",1.7f,false,()->{commitRaw();symbols=true;rebuildKeys();},null,"数字与符号");
+        addT9Bottom(bottom,"空格",2.4f,false,this::space,()->getSystemService(InputMethodManager.class).showInputMethodPicker(),"空格，拼音时选择首个候选词；长按切换输入法");
+        addT9Bottom(bottom,"中/英",1.1f,false,()->{commitRaw();chinese=!chinese;rebuildKeys();updateCandidates();},()->getSystemService(InputMethodManager.class).showInputMethodPicker(),"切换中英文，长按选择输入法");
+        addT9Bottom(bottom,"发送",1.2f,true,this::sendAction,null,"发送");
     }
     private void showLayouts(){
         expanded=false;updateExpandButton();commitRaw();keys.removeAllViews();
@@ -211,5 +291,33 @@ public final class GlassImeService extends InputMethodService {
     private void delete(){InputConnection ic=getCurrentInputConnection();if(ic==null)return;
         if(!lastEmoji.isEmpty()&&composing.length()==0){CharSequence tail=ic.getTextBeforeCursor(lastEmoji.length(),0);if(lastEmoji.contentEquals(tail==null?"":tail)){ic.deleteSurroundingText(lastEmoji.length(),0);lastEmoji="";previousWord="";updateCandidates();return;}lastEmoji="";}
         previousWord="";acceptedText.setLength(0);acceptedSpelling.setLength(0);if(composing.length()>0){composing.deleteCharAt(composing.length()-1);if(!t9Active()||composing.length()==0){displayed=composing.toString();ic.setComposingText(displayed,1);}updateCandidates();}else{ic.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN,KeyEvent.KEYCODE_DEL));ic.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_UP,KeyEvent.KEYCODE_DEL));updateCandidates();}}
+    private void showPunctuation(){
+        keys.removeAllViews();emojiPanel=false;expanded=false;updateExpandButton();commitRaw();
+        String[][] pages={{"，","。","？","！","、","；","："},{"“","”","‘","’","（","）","《"},{"》","【","】","〔","〕","…","—"}};
+        for(String[] line:pages){
+            LinearLayout row=row();
+            for(String mark:line){
+                View key=t9Text(mark,20,false,()->punctuation(mark),null);
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.MATCH_PARENT,1f);lp.setMargins(dp(3),dp(4),dp(3),dp(4));row.addView(key,lp);
+            }
+            keys.addView(row);
+        }
+        LinearLayout bottom=row();
+        addKey(bottom,"返回键盘",0,"返回键盘",2,false,this::rebuildKeys,false);
+        addKey(bottom,"空格",0,"空格",2,false,this::space,false);
+        addKey(bottom,"",R.drawable.ic_backspace,"删除",1,false,this::delete,true);
+        keys.addView(bottom);
+    }
+    private void clearComposing(){
+        displayed="";composing.setLength(0);acceptedText.setLength(0);acceptedSpelling.setLength(0);
+        InputConnection ic=getCurrentInputConnection();if(ic!=null)ic.setComposingText("",1);
+        updateCandidates();
+    }
+    private void sendAction(){
+        if(composing.length()>0){commitRaw();return;}
+        InputConnection ic=getCurrentInputConnection();if(ic==null)return;
+        if(editorAction!=EditorInfo.IME_ACTION_NONE&&editorAction!=EditorInfo.IME_ACTION_UNSPECIFIED)ic.performEditorAction(editorAction);
+        else{ic.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN,KeyEvent.KEYCODE_ENTER));ic.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_UP,KeyEvent.KEYCODE_ENTER));}
+    }
     private void enter(){if(composing.length()>0){commitRaw();return;}InputConnection ic=getCurrentInputConnection();if(ic==null)return;if(editorAction!=EditorInfo.IME_ACTION_NONE&&editorAction!=EditorInfo.IME_ACTION_UNSPECIFIED)ic.performEditorAction(editorAction);else ic.commitText("\n",1);}
 }

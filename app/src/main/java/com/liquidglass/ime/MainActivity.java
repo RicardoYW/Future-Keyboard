@@ -44,7 +44,7 @@ public final class MainActivity extends Activity {
         TextView setup=label(isCurrentIme()?"已启用 · 当前正在使用":"启用与切换均由 Android 系统管理",11,MUTED);setup.setGravity(Gravity.CENTER);panel.addView(setup);
         section("只属于你的键盘");
         row("隐私承诺","了解不联网、本地存储与数据清除",this::showPrivacy);
-        row("键盘与触感",(prefs.getBoolean("nine",false)?"中文九宫格":"中文全键盘")+" · 中英文切换 · 按键与选字触感",this::showTyping);
+        row("键盘与触感",(prefs.getBoolean("nine",true)?"中文九宫格（微信式）":"中文全键盘")+" · 中英文切换 · 按键与选字触感",this::showTyping);
         row("液态玻璃外观","实时背景模糊 · 玻璃底色",this::showAppearance);
         row("本地词组","词组记忆、自定义与清空，都由你决定",this::showWords);
         row("启用与切换","管理系统输入法与选择当前键盘",this::showSetup);
@@ -69,7 +69,7 @@ public final class MainActivity extends Activity {
         explanation("没有联网跳转","官网和开源项目地址仅作文字说明，没有浏览器跳转或网页加载。开源许可随应用提供，断网也能查看。");
         button("管理本地词组",this::showWords);
     }
-    private void showTyping(){page="typing";basePage("键盘与触感","选一种顺手的布局，保留自己的输入习惯。",false);section("输入方式");toggle("中文使用九宫格","nine",false);panel.addView(label("关闭后使用全键盘；中英文可从键盘地球键切换。布局选择只保存在本机。",13,MUTED));section("离线词语联想");toggle("中英文词语联想","suggestions",true);panel.addView(label("中文词组补全与后续词推荐，英文单词补全与常用搭配推荐。全部在本机完成，不联网、不生成整句，也不读取聊天历史。关闭后仍保留中文拼音选字。",13,MUTED));section("触感反馈");toggle("按键与选字触感","haptics",true);panel.addView(label("触感跟随设备与系统设置。",12,MUTED));button("体验当前键盘",this::showDemo);}
+    private void showTyping(){page="typing";basePage("键盘与触感","选一种顺手的布局，保留自己的输入习惯。",false);section("输入方式");toggle("中文使用九宫格","nine",true);panel.addView(label("关闭后使用全键盘；中英文可从键盘地球键切换。布局选择只保存在本机。",13,MUTED));section("离线词语联想");toggle("中英文词语联想","suggestions",true);panel.addView(label("中文词组补全与后续词推荐，英文单词补全与常用搭配推荐。全部在本机完成，不联网、不生成整句，也不读取聊天历史。关闭后仍保留中文拼音选字。",13,MUTED));section("触感反馈");toggle("按键与选字触感","haptics",true);panel.addView(label("触感跟随设备与系统设置。",12,MUTED));button("体验当前键盘",this::showDemo);}
     private void showAppearance(){page="appearance";basePage("液态玻璃外观","透过键盘，看见背景的流动。",false);status=label("",12,GlassStyle.MINT);panel.addView(status);refreshStatus();slider("背景模糊","radius",0,120,72," px");slider("玻璃底色","opacity",20,85,42,"% 不透明");explanation("来自真实背景的模糊","需要 Android 12 及以上和设备支持。系统关闭模糊时会自动加深底色。若正在使用的应用在键盘后方绘制纯色，模糊后也会是纯色。效果完全在设备上渲染。");button("体验液态玻璃",this::showDemo);}
     private void showWords(){page="words";basePage("本地词组","越用越顺手，记忆始终留在你的设备里。",false);toggle("记住常用词组（仅保存在本机）","learning",true);explanation("你选择，才记住","开启后保存选中的词条及词频，并提高常用词的排序。同一串拼音分次选择完成的词组也可记住。密码和应用要求的隐私输入场景不学习。");button("添加自定义词组",this::addPhrase);button("清空本机常用词组",()->new android.app.AlertDialog.Builder(this).setTitle("清空常用词组？").setMessage("将删除学到的词频和手动添加的词组。内置离线词库不受影响，删除后无法撤销。").setNegativeButton("取消",null).setPositiveButton("清空",(dialog,which)->dictionaryIo.execute(()->{LearningStore.clear(this);runOnUiThread(()->Toast.makeText(this,"已清空本机常用词组",Toast.LENGTH_SHORT).show());})).show());panel.addView(label("关闭学习会保留已有本地词组，但不会继续使用或新增个人词条；清空才会删除这些记录。",12,MUTED));}
     private void showSetup(){page="setup";basePage("开始安心输入","两个步骤，由 Android 系统完成。",false);button("1  启用 Future Keyboard",()->startActivity(new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)));button("2  切换到 Future Keyboard",()->getSystemService(InputMethodManager.class).showInputMethodPicker());explanation("关于系统的通用提示","Android 会对第三方输入法显示通用提示。Future Keyboard 不申请互联网权限，输入与词库处理仅在本机完成。你可以在这里先阅读隐私说明，再决定是否启用。");button("阅读隐私承诺",this::showPrivacy);button("体验当前键盘",this::showDemo);}

@@ -38,7 +38,7 @@ public class CandidateFlowInstrumentation extends Instrumentation {
     private void screenshot(String filename)throws Exception{android.graphics.Bitmap b=ui.takeScreenshot();if(b==null)return;try(FileOutputStream f=new FileOutputStream(new File(getTargetContext().getFilesDir(),filename))){b.compress(android.graphics.Bitmap.CompressFormat.PNG,100,f);}b.recycle();}
     private void composeRare(boolean nine)throws Exception{
         layout(nine?"中文 · 九宫格":"中文 · 全键盘");clear();
-        if(nine){for(char digit:"64426".toCharArray()){int n=digit-'1';tap(new int[]{166,465,764}[n%3],new int[]{1725,1870,2020}[n/3]);}}else type("nihao");
+        if(nine){for(char digit:"64426".toCharArray())click(String.valueOf(digit),false);}else type("nihao");
         click("展开候选词",true);screenshot("v06-debug-expanded.png");check("expanded grid contains phrase",find("你好，nihao",true)!=null);screenshot(nine?"v06-t9-expanded.png":"v06-expanded.png");click("收起候选词",true);check("collapsing preserves composition",value().equals("nihao"));click("展开候选词",true);
         chooseScrolling("旎","ni");check((nine?"T9":"QWERTY")+" partial choice preserves remaining pinyin",value().equals("旎hao"));screenshot("v06-next-syllable.png");
         chooseScrolling("郝","hao");check((nine?"T9":"QWERTY")+" custom phrase completed",value().equals("旎郝"));check("keyboard restored after final choice",find("选择键盘布局",true)!=null);
@@ -50,6 +50,9 @@ public class CandidateFlowInstrumentation extends Instrumentation {
         composeRare(false);
         clear();type("nihao");check("learned complete phrase promoted",find("旎郝",false)!=null);click("旎郝",false);check("learned phrase commits as one word",value().equals("旎郝"));
         composeRare(true);
+        check("T9 layout exposes send key",find("发送",false)!=null);
+        check("T9 layout exposes punctuation column",find("，",false)!=null);
+        check("T9 layout exposes tall enter key",find("换行",false)!=null);
         click("Emoji 表情",true);check("emoji grid has many items",find("插入表情 😾",true)!=null);screenshot("v06-emoji-faces.png");click("插入表情 😀",true);check("simple emoji inserts",value().equals("旎郝😀"));click("删除表情",true);check("simple emoji deletes",value().equals("旎郝"));
         shell("input swipe 940 1690 100 1690 400");pause();
         click("符号",false);screenshot("v06-emoji-symbols.png");click("插入表情 ❤️",true);check("variation emoji inserts",value().equals("旎郝❤️"));click("删除表情",true);check("variation emoji deletes as whole",value().equals("旎郝"));click("返回键盘",true);
