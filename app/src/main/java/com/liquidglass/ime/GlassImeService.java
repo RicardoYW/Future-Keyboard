@@ -139,7 +139,7 @@ public final class GlassImeService extends InputMethodService {
         return finishKey(v,desc,action,true,longPress);
     }
     private void addT9Bottom(LinearLayout row,String label,float weight,boolean accent,Runnable action,Runnable longPress,String desc){
-        View key=t9Text(label,label.length()>1?15:20,accent,action,longPress);key.setContentDescription(desc);
+        View key=t9Text(label,label.length()>2?12:label.length()>1?15:20,accent,action,longPress);key.setContentDescription(desc);
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.MATCH_PARENT,weight);lp.setMargins(dp(3),0,dp(3),0);row.addView(key,lp);
     }
     private void buildT9(){
@@ -183,8 +183,8 @@ public final class GlassImeService extends InputMethodService {
         addT9Bottom(bottom,"！",1.6f,false,()->punctuation("！"),null,"感叹号");
         addT9Bottom(bottom,"符号",1.7f,false,this::showPunctuation,null,"中文标点");
         addT9Bottom(bottom,"123",1.7f,false,()->{commitRaw();symbols=true;rebuildKeys();},null,"数字与符号");
-        addT9Bottom(bottom,"空格",2.4f,false,this::space,()->getSystemService(InputMethodManager.class).showInputMethodPicker(),"空格，拼音时选择首个候选词；长按切换输入法");
-        addT9Bottom(bottom,"中/英",1.1f,false,()->{commitRaw();chinese=!chinese;rebuildKeys();updateCandidates();},()->getSystemService(InputMethodManager.class).showInputMethodPicker(),"切换中英文，长按选择输入法");
+        addT9Bottom(bottom,"空格",2.25f,false,this::space,()->getSystemService(InputMethodManager.class).showInputMethodPicker(),"空格，拼音时选择首个候选词；长按切换输入法");
+        addT9Bottom(bottom,"中/英",1.25f,false,()->{commitRaw();chinese=!chinese;rebuildKeys();updateCandidates();},()->getSystemService(InputMethodManager.class).showInputMethodPicker(),"切换中英文，长按选择输入法");
         addT9Bottom(bottom,"发送",1.2f,true,this::sendAction,null,"发送");
     }
     private void showLayouts(){
