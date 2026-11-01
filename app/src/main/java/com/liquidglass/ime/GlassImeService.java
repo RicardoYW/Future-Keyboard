@@ -54,8 +54,8 @@ public final class GlassImeService extends InputMethodService {
     @Override public boolean onEvaluateFullscreenMode(){return false;}
     @Override public View onCreateInputView(){
         if(blur!=null)blur.close();
-        dock=new LinearLayout(this);dock.setOrientation(LinearLayout.VERTICAL);dock.setPadding(dp(6),dp(6),dp(6),dp(8));
-        if(Build.VERSION.SDK_INT>=30)dock.setOnApplyWindowInsetsListener((v,insets)->{dock.setPadding(dp(6),dp(6),dp(6),dp(8)+insets.getInsets(WindowInsets.Type.navigationBars()).bottom);return insets;});
+        dock=new LinearLayout(this);dock.setOrientation(LinearLayout.VERTICAL);dock.setPadding(0,dp(6),0,dp(8));
+        if(Build.VERSION.SDK_INT>=30)dock.setOnApplyWindowInsetsListener((v,insets)->{dock.setPadding(0,dp(6),0,dp(8)+insets.getInsets(WindowInsets.Type.navigationBars()).bottom);return insets;});
         dock.setBackgroundColor(Color.TRANSPARENT);
         LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);
         ImageButton layouts=icon(R.drawable.ic_keyboard,"选择键盘布局");layouts.setOnClickListener(v->dispatch(()->{haptic(v);showLayouts();}));header.addView(layouts,new LinearLayout.LayoutParams(dp(48),dp(40)));
@@ -105,9 +105,9 @@ public final class GlassImeService extends InputMethodService {
         addKey(bottom,".",0,"句号",.8f,false,()->punctuation(chinese?"。":"."),false);addKey(bottom,"",R.drawable.ic_enter,"回车",1.5f,true,this::enter,false);keys.addView(bottom);
     }
     // ---------- 九宫格 · 微信式布局 ----------
-    private int t9Row(){return getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE?44:56;}
-    private RippleDrawable solidKey(boolean accent){return new RippleDrawable(ColorStateList.valueOf(0x5581D8B8),GlassStyle.surface(accent?GlassStyle.MINT:0x1FFFFFFF,dp(11),accent?0:0x28FFFFFF),null);}
-    private RippleDrawable softKey(){return new RippleDrawable(ColorStateList.valueOf(0x5581D8B8),GlassStyle.surface(0x14FFFFFF,dp(10),0x1FFFFFFF),null);}
+    private int t9Row(){return getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE?42:51;}
+    private RippleDrawable solidKey(boolean accent){return new RippleDrawable(ColorStateList.valueOf(0x5581D8B8),GlassStyle.surface(accent?GlassStyle.MINT:0x1FFFFFFF,dp(8),accent?0:0x28FFFFFF),null);}
+    private RippleDrawable softKey(){return new RippleDrawable(ColorStateList.valueOf(0x5581D8B8),GlassStyle.surface(0x14FFFFFF,dp(8),0x1FFFFFFF),null);}
     private View finishKey(View view,String desc,Runnable action,boolean onDown,Runnable longPress){
         view.setContentDescription(desc);view.setClickable(true);view.setFocusable(true);
         view.setOnClickListener(v->dispatch(()->{haptic(v);action.run();}));
@@ -131,7 +131,7 @@ public final class GlassImeService extends InputMethodService {
     }
     private View t9Letter(String letters,String digit,Runnable action){
         FrameLayout frame=new FrameLayout(this);frame.setBackground(solidKey(false));
-        TextView main=text(letters,20);main.setTypeface(Typeface.DEFAULT_BOLD);
+        TextView main=text(letters,21);main.setTypeface(Typeface.DEFAULT_BOLD);
         frame.addView(main,new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT));
         TextView sup=text(digit,9);sup.setTextColor(0x8CE8F3F1);sup.setGravity(Gravity.TOP|Gravity.END);sup.setPadding(0,dp(3),dp(6),0);
         frame.addView(sup,new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT));
@@ -142,7 +142,7 @@ public final class GlassImeService extends InputMethodService {
         return finishKey(v,desc,action,true,longPress);
     }
     private View addT9Bottom(LinearLayout row,String label,float weight,boolean accent,Runnable action,Runnable longPress,String desc){
-        View key=t9Text(label,label.length()>2?11:label.length()>1?15:20,accent,action,longPress);key.setContentDescription(desc);
+        View key=t9Text(label,label.length()>2?12:label.length()>1?14:20,accent,action,longPress);key.setContentDescription(desc);
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.MATCH_PARENT,weight);lp.setMargins(dp(3),0,dp(3),0);row.addView(key,lp);
         return key;
     }
@@ -152,7 +152,7 @@ public final class GlassImeService extends InputMethodService {
         area.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,3*h+6*gap));
 
         LinearLayout marks=new LinearLayout(this);marks.setOrientation(LinearLayout.VERTICAL);
-        area.addView(marks,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.MATCH_PARENT,1.6f));
+        area.addView(marks,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.MATCH_PARENT,1.83f));
         leftKeys=new TextView[3];
         String[] markKeys={"，","。","？"};
         for(int i=0;i<3;i++){
@@ -177,7 +177,7 @@ public final class GlassImeService extends InputMethodService {
         }
 
         LinearLayout side=new LinearLayout(this);side.setOrientation(LinearLayout.VERTICAL);
-        area.addView(side,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.MATCH_PARENT,2.1f));
+        area.addView(side,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.MATCH_PARENT,1.86f));
         View delete=t9Icon(R.drawable.ic_backspace,"删除，长按清空拼音",this::delete,this::clearComposing);
         LinearLayout.LayoutParams dlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,h);dlp.setMargins(gap,gap,gap,gap);side.addView(delete,dlp);
         tallKey=(TextView)t9Text("换行",16,false,()->{if(composing.length()>0)clearComposing();else newline();},null);
@@ -187,12 +187,12 @@ public final class GlassImeService extends InputMethodService {
         LinearLayout bottom=new LinearLayout(this);bottom.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams blp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,h);blp.setMargins(0,gap,0,0);bottom.setLayoutParams(blp);
         keys.addView(bottom);
-        bangKey=(TextView)addT9Bottom(bottom,"！",1.6f,false,()->punctuation("！"),null,"感叹号");
-        addT9Bottom(bottom,"符号",1.2f,false,this::showPunctuation,null,"中文标点");
-        addT9Bottom(bottom,"123",1.2f,false,()->{commitRaw();symbols=true;rebuildKeys();},null,"数字与符号");
-        addT9Bottom(bottom,"空格",2.4f,false,this::space,()->getSystemService(InputMethodManager.class).showInputMethodPicker(),"空格，拼音时选择首个候选词；长按切换输入法");
-        addT9Bottom(bottom,"中/英",1.2f,false,()->{commitRaw();chinese=!chinese;rebuildKeys();updateCandidates();},()->getSystemService(InputMethodManager.class).showInputMethodPicker(),"切换中英文，长按选择输入法");
-        actionKey=(TextView)addT9Bottom(bottom,"发送",2.1f,true,()->{if(composing.length()>0)commitRaw();else sendAction();},null,"发送");
+        bangKey=(TextView)addT9Bottom(bottom,"！",2.18f,false,()->punctuation("！"),null,"感叹号");
+        addT9Bottom(bottom,"符号",1.59f,false,this::showPunctuation,null,"中文标点");
+        addT9Bottom(bottom,"123",1.59f,false,()->{commitRaw();symbols=true;rebuildKeys();},null,"数字与符号");
+        addT9Bottom(bottom,"空格",2.18f,false,this::space,()->getSystemService(InputMethodManager.class).showInputMethodPicker(),"空格，拼音时选择首个候选词；长按切换输入法");
+        addT9Bottom(bottom,"中/英",1.58f,false,()->{commitRaw();chinese=!chinese;rebuildKeys();updateCandidates();},()->getSystemService(InputMethodManager.class).showInputMethodPicker(),"切换中英文，长按选择输入法");
+        actionKey=(TextView)addT9Bottom(bottom,"发送",2.20f,false,()->{if(composing.length()>0)commitRaw();else sendAction();},null,"发送");
         syncT9Actions();
     }
     private void showLayouts(){
@@ -232,7 +232,7 @@ public final class GlassImeService extends InputMethodService {
     private LinearLayout row(){LinearLayout r=new LinearLayout(this);int h=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE?42:54;r.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(h)));return r;}
     private View addKey(LinearLayout row,String label,int resource,String desc,float weight,boolean accent,Runnable action,boolean onDown){
         View view;if(resource!=0){ImageButton b=icon(resource,desc);if(accent)b.setImageTintList(ColorStateList.valueOf(0xFF122A24));view=b;}else view=text(label,label.length()>1?15:24);
-        view.setContentDescription(desc);view.setClickable(true);view.setFocusable(true);view.setBackground(new RippleDrawable(ColorStateList.valueOf(0x5581D8B8),GlassStyle.surface(accent?GlassStyle.MINT:0x1FFFFFFF,dp(11),accent?0:0x28FFFFFF),null));
+        view.setContentDescription(desc);view.setClickable(true);view.setFocusable(true);view.setBackground(new RippleDrawable(ColorStateList.valueOf(0x5581D8B8),GlassStyle.surface(accent?GlassStyle.MINT:0x1FFFFFFF,dp(8),accent?0:0x28FFFFFF),null));
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-1,weight);lp.setMargins(dp(3),dp(4),dp(3),dp(4));row.addView(view,lp);
         // Touch-down enters characters immediately; click remains available to accessibility services.
         view.setOnClickListener(v->dispatch(()->{haptic(v);action.run();}));
