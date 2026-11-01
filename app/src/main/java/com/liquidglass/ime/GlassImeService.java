@@ -19,6 +19,7 @@ public final class GlassImeService extends InputMethodService {
     private String displayed="",previousWord="";
     private boolean prediction,emojiPanel,englishEligible,expanded;
     private ImageButton expandButton;
+    private TextView tallKey,actionKey,bangKey;
     private int visibleCandidates,emojiCategory;
     private String lastEmoji="";
     private final WordSuggestions words=new WordSuggestions();
@@ -90,7 +91,7 @@ public final class GlassImeService extends InputMethodService {
     private boolean t9Active(){return chinese&&nine&&!symbols&&!sensitive;}
     private void dispatch(Runnable action){if(waitingForChoice)deferred.add(action);else action.run();}
     private void rebuildKeys(){
-        keys.removeAllViews();emojiPanel=false;expanded=false;updateExpandButton();
+        keys.removeAllViews();emojiPanel=false;expanded=false;updateExpandButton();tallKey=null;actionKey=null;bangKey=null;
         if(t9Active()){buildT9();return;}
         String[] rows=symbols?new String[]{"1234567890","@#$%&*()-","!?/;:'\""}:new String[]{"qwertyuiop","asdfghjkl","zxcvbnm"};
         for(int r=0;r<3;r++){LinearLayout row=row();if(r==1)row.setPadding(dp(16),0,dp(16),0);if(r==2)addKey(row,"",R.drawable.ic_shift,"大写切换",1.3f,false,()->{shifted=!shifted;rebuildKeys();},false);
@@ -138,9 +139,10 @@ public final class GlassImeService extends InputMethodService {
         View v=icon(res,desc);v.setBackground(softKey());
         return finishKey(v,desc,action,true,longPress);
     }
-    private void addT9Bottom(LinearLayout row,String label,float weight,boolean accent,Runnable action,Runnable longPress,String desc){
+    private View addT9Bottom(LinearLayout row,String label,float weight,boolean accent,Runnable action,Runnable longPress,String desc){
         View key=t9Text(label,label.length()>2?11:label.length()>1?15:20,accent,action,longPress);key.setContentDescription(desc);
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.MATCH_PARENT,weight);lp.setMargins(dp(3),0,dp(3),0);row.addView(key,lp);
+        return key;
     }
     private void buildT9(){
         int h=dp(t9Row()),gap=dp(3);
@@ -173,19 +175,20 @@ public final class GlassImeService extends InputMethodService {
         area.addView(side,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.MATCH_PARENT,2.1f));
         View delete=t9Icon(R.drawable.ic_backspace,"删除，长按清空拼音",this::delete,this::clearComposing);
         LinearLayout.LayoutParams dlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,h);dlp.setMargins(gap,gap,gap,gap);side.addView(delete,dlp);
-        View enter=t9Text("换行",16,false,this::enter,null);
-        LinearLayout.LayoutParams elp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,2*h+2*gap);elp.setMargins(gap,gap,gap,gap);side.addView(enter,elp);
+        tallKey=(TextView)t9Text("换行",16,false,()->{if(composing.length()>0)clearComposing();else newline();},null);
+        LinearLayout.LayoutParams elp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,2*h+2*gap);elp.setMargins(gap,gap,gap,gap);side.addView(tallKey,elp);
         keys.addView(area);
 
         LinearLayout bottom=new LinearLayout(this);bottom.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams blp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,h);blp.setMargins(0,gap,0,0);bottom.setLayoutParams(blp);
         keys.addView(bottom);
-        addT9Bottom(bottom,"！",1.6f,false,()->punctuation("！"),null,"感叹号");
+        bangKey=(TextView)addT9Bottom(bottom,"！",1.6f,false,()->punctuation("！"),null,"感叹号");
         addT9Bottom(bottom,"符号",1.2f,false,this::showPunctuation,null,"中文标点");
         addT9Bottom(bottom,"123",1.2f,false,()->{commitRaw();symbols=true;rebuildKeys();},null,"数字与符号");
         addT9Bottom(bottom,"空格",2.4f,false,this::space,()->getSystemService(InputMethodManager.class).showInputMethodPicker(),"空格，拼音时选择首个候选词；长按切换输入法");
         addT9Bottom(bottom,"中/英",1.2f,false,()->{commitRaw();chinese=!chinese;rebuildKeys();updateCandidates();},()->getSystemService(InputMethodManager.class).showInputMethodPicker(),"切换中英文，长按选择输入法");
-        addT9Bottom(bottom,"发送",2.1f,true,this::sendAction,null,"发送");
+        actionKey=(TextView)addT9Bottom(bottom,"发送",2.1f,true,()->{if(composing.length()>0)commitRaw();else sendAction();},null,"发送");
+        syncT9Actions();
     }
     private void showLayouts(){
         expanded=false;updateExpandButton();commitRaw();keys.removeAllViews();
@@ -242,6 +245,7 @@ public final class GlassImeService extends InputMethodService {
     }
     private void updateCandidates(){
         if(dock==null)return;
+        syncT9Actions();
         int version=++generation;String raw=composing.toString();boolean nineMode=t9Active(),personal=personalized&&prefs.getBoolean("learning",true);
         if(pendingQuery!=null)worker.removeCallbacks(pendingQuery);
         boolean suggestions=prefs.getBoolean("suggestions",true)&&!sensitive;
@@ -308,10 +312,20 @@ public final class GlassImeService extends InputMethodService {
         addKey(bottom,"",R.drawable.ic_backspace,"删除",1,false,this::delete,true);
         keys.addView(bottom);
     }
+    private void syncT9Actions(){
+        boolean editing=composing.length()>0;
+        if(tallKey!=null){tallKey.setText(editing?"重输":"换行");tallKey.setContentDescription(editing?"重输：清空已输入的拼音":"换行");}
+        if(actionKey!=null){actionKey.setText(editing?"确定":"发送");actionKey.setContentDescription(editing?"确定：把当前拼音原样上屏":"发送");}
+        if(bangKey!=null)bangKey.setVisibility(editing?View.GONE:View.VISIBLE);
+    }
     private void clearComposing(){
         displayed="";composing.setLength(0);acceptedText.setLength(0);acceptedSpelling.setLength(0);
         InputConnection ic=getCurrentInputConnection();if(ic!=null)ic.setComposingText("",1);
         updateCandidates();
+    }
+    private void newline(){
+        if(composing.length()>0)commitRaw();
+        InputConnection ic=getCurrentInputConnection();if(ic!=null)ic.commitText("\n",1);
     }
     private void sendAction(){
         if(composing.length()>0){commitRaw();return;}
