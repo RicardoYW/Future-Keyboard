@@ -35,7 +35,12 @@ public final class PinyinEngine {
         return out.toString();
     }
     /** Temporary letters while a new T9 decode is in flight; never expose numeric codes. */
-    static String fallbackSpelling(String raw){StringBuilder out=new StringBuilder();for(char c:normalize(raw).toCharArray())if(c>='2'&&c<='9')out.append("adgjmptw".charAt(c-'2'));return out.toString();}
+    static String fallbackSpelling(String raw){StringBuilder out=new StringBuilder();for(char c:normalize(raw).toCharArray()){if(c>='2'&&c<='9')out.append("adgjmptw".charAt(c-'2'));else if(c>='a'&&c<='z')out.append(c);}return out.toString();}
+    /** 数字与显式字母混合的九宫格查询键：字母转成对应数字，数字原样保留。 */
+    public static String t9Mixed(String input){StringBuilder out=new StringBuilder();for(char c:normalize(input).toCharArray()){if(c>='2'&&c<='9')out.append(c);else if(c>='a'&&c<='z')out.append(digit(c));}return out.toString();}
+    private static boolean hasLetter(String key){for(int i=0;i<key.length();i++){char c=key.charAt(i);if(c>='a'&&c<='z')return true;}return false;}
+    /** 候选拼音是否满足混合约束：数字位匹配同键字母，字母位必须完全一致。 */
+    private static boolean compatible(String mix,String spelling){if(spelling==null||spelling.length()<mix.length())return false;for(int i=0;i<mix.length();i++){char k=mix.charAt(i),s=spelling.charAt(i);if(k>='2'&&k<='9'){if(digit(s)!=k)return false;}else if(s!=k)return false;}return true;}
     private static char digit(int c) { return "22233344455566677778889999".charAt(c-'a'); }
     public void map(FileChannel channel,long offset,long length) throws IOException {
         ByteBuffer buffer=channel.map(FileChannel.MapMode.READ_ONLY,offset,length).order(ByteOrder.BIG_ENDIAN);
@@ -112,31 +117,33 @@ public final class PinyinEngine {
     public List<Candidate> candidates(String raw) { return candidates(raw,false,true); }
     public List<Candidate> candidates(String raw,boolean nine,boolean personalized) {
         String key=normalize(raw);if(key.isEmpty())return Collections.emptyList();
+        boolean mixed=nine&&hasLetter(key);
+        String search=nine?t9Mixed(key):key;
         List<Candidate> result=new ArrayList<>();
         if(personalized)for(Learned entry:learned.values()) {
             String code=nine?t9(entry.spelling):entry.spelling;
-            if(code.equals(key))result.add(new Candidate(entry.text,entry.spelling,raw.length(),30+Math.log1p(entry.count)+entry.lastUsed/1e15));
+            if(code.equals(search)&&(!mixed||compatible(key,entry.spelling)))result.add(new Candidate(entry.text,entry.spelling,raw.length(),30+Math.log1p(entry.count)+entry.lastUsed/1e15));
         }
-        result.addAll(lookup(key,nine,false,raw.length()));
-        if(result.isEmpty()&&key.length()>=4) {
-            Candidate sentence=sentence(key,nine);if(sentence!=null)result.add(new Candidate(sentence.text,sentence.spelling,raw.length(),sentence.score));
+        result.addAll(lookup(search,nine,false,raw.length()));
+        if(result.isEmpty()&&search.length()>=4) {
+            Candidate sentence=sentence(search,nine);if(sentence!=null&&(!mixed||compatible(key,sentence.spelling)))result.add(new Candidate(sentence.text,sentence.spelling,raw.length(),sentence.score));
         }
         // Exact matches always precede unfinished-word completions.
         result.sort(Comparator.comparingDouble((Candidate c)->c.score).reversed());
         if(result.size()<LIMIT) {
-            List<Candidate> prefix=lookup(key,nine,true,raw.length());
-            if(personalized)for(Learned e:learned.values())if((nine?t9(e.spelling):e.spelling).startsWith(key))prefix.add(0,new Candidate(e.text,e.spelling,raw.length(),30+Math.log1p(e.count)));
+            List<Candidate> prefix=lookup(search,nine,true,raw.length());
+            if(personalized)for(Learned e:learned.values())if((nine?t9(e.spelling):e.spelling).startsWith(search))prefix.add(0,new Candidate(e.text,e.spelling,raw.length(),30+Math.log1p(e.count)));
             result.addAll(prefix);
         }
-        for(int n=key.length()-1;n>0&&result.size()<LIMIT*2;n--) {
+        for(int n=search.length()-1;n>0&&result.size()<LIMIT*2;n--) {
             int rawCount=0,normalizedCount=0;
             while(rawCount<raw.length()&&normalizedCount<n){char c=raw.charAt(rawCount++);if(c!='\''&&c!=' ')normalizedCount++;}
-            result.addAll(lookup(key.substring(0,n),nine,false,rawCount));
+            result.addAll(lookup(search.substring(0,n),nine,false,rawCount));
         }
         LinkedHashMap<String,Candidate> distinct=new LinkedHashMap<>();
-        for(Candidate c:result){distinct.putIfAbsent(c.text,c);if(distinct.size()>=LIMIT)break;}
+        for(Candidate c:result){if(mixed&&!compatible(key,c.spelling))continue;distinct.putIfAbsent(c.text,c);if(distinct.size()>=LIMIT)break;}
         // The phrase page is bounded; the first-syllable character tail is exhaustive.
-        for(Candidate c:firstCharacters(raw,nine))distinct.putIfAbsent(c.text,c);
+        for(Candidate c:firstCharacters(mixed?search:raw,nine))if(!mixed||compatible(key,c.spelling))distinct.putIfAbsent(c.text,c);
         return new ArrayList<>(distinct.values());
     }
     /** Dynamic programming for dictionary words joined in an otherwise missing phrase. */

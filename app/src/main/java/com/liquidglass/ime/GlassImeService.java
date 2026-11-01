@@ -20,6 +20,8 @@ public final class GlassImeService extends InputMethodService {
     private boolean prediction,emojiPanel,englishEligible,expanded;
     private ImageButton expandButton;
     private TextView tallKey,actionKey,bangKey;
+    private TextView[] leftKeys;
+    private char lastDigit='4';
     private int visibleCandidates,emojiCategory;
     private String lastEmoji="";
     private final WordSuggestions words=new WordSuggestions();
@@ -91,7 +93,7 @@ public final class GlassImeService extends InputMethodService {
     private boolean t9Active(){return chinese&&nine&&!symbols&&!sensitive;}
     private void dispatch(Runnable action){if(waitingForChoice)deferred.add(action);else action.run();}
     private void rebuildKeys(){
-        keys.removeAllViews();emojiPanel=false;expanded=false;updateExpandButton();tallKey=null;actionKey=null;bangKey=null;
+        keys.removeAllViews();emojiPanel=false;expanded=false;updateExpandButton();tallKey=null;actionKey=null;bangKey=null;leftKeys=null;
         if(t9Active()){buildT9();return;}
         String[] rows=symbols?new String[]{"1234567890","@#$%&*()-","!?/;:'\""}:new String[]{"qwertyuiop","asdfghjkl","zxcvbnm"};
         for(int r=0;r<3;r++){LinearLayout row=row();if(r==1)row.setPadding(dp(16),0,dp(16),0);if(r==2)addKey(row,"",R.drawable.ic_shift,"大写切换",1.3f,false,()->{shifted=!shifted;rebuildKeys();},false);
@@ -151,10 +153,13 @@ public final class GlassImeService extends InputMethodService {
 
         LinearLayout marks=new LinearLayout(this);marks.setOrientation(LinearLayout.VERTICAL);
         area.addView(marks,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.MATCH_PARENT,1.6f));
+        leftKeys=new TextView[3];
         String[] markKeys={"，","。","？"};
-        for(String mark:markKeys){
-            View key=t9Text(mark,22,false,()->punctuation(mark),null);
+        for(int i=0;i<3;i++){
+            final TextView key=(TextView)t9Text(markKeys[i],22,false,()->{},null);
+            key.setOnClickListener(v->dispatch(()->{haptic(v);String label=String.valueOf(((TextView)v).getText());char c=label.charAt(0);if(composing.length()>0&&c>='a'&&c<='z')appendLetter(label);else punctuation(label);}));
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,h);lp.setMargins(gap,gap,gap,gap);marks.addView(key,lp);
+            leftKeys[i]=key;
         }
 
         LinearLayout grid=new LinearLayout(this);grid.setOrientation(LinearLayout.VERTICAL);
@@ -238,7 +243,7 @@ public final class GlassImeService extends InputMethodService {
         return view;
     }
     private void type(String value){InputConnection ic=getCurrentInputConnection();if(ic==null)return;
-        lastEmoji="";char c=value.charAt(0);boolean pinyin=chinese&&!symbols&&!sensitive&&((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(t9Active()&&c>='2'&&c<='9')||c=='\'');
+        lastEmoji="";char c=value.charAt(0);if(t9Active()&&c>='2'&&c<='9')lastDigit=c;boolean pinyin=chinese&&!symbols&&!sensitive&&((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(t9Active()&&c>='2'&&c<='9')||c=='\'');
         boolean english=!chinese&&!symbols&&englishEligible&&Character.isLetter(c);
         if(pinyin||english){if(composing.length()>=64)commitRaw();if(composing.length()==0){acceptedText.setLength(0);acceptedSpelling.setLength(0);}if(c=='\''&&(composing.length()==0||composing.charAt(composing.length()-1)=='\''))return;composing.append(pinyin?value.toLowerCase(Locale.ROOT):value);if(!t9Active()){displayed=composing.toString();ic.setComposingText(displayed,1);}updateCandidates();}else ic.commitText(value,1);
         if(shifted){shifted=false;rebuildKeys();}
@@ -317,6 +322,29 @@ public final class GlassImeService extends InputMethodService {
         if(tallKey!=null){tallKey.setText(editing?"重输":"换行");tallKey.setContentDescription(editing?"重输：清空已输入的拼音":"换行");}
         if(actionKey!=null){actionKey.setText(editing?"确定":"发送");actionKey.setContentDescription(editing?"确定：把当前拼音原样上屏":"发送");}
         if(bangKey!=null)bangKey.setVisibility(editing?View.GONE:View.VISIBLE);
+        if(leftKeys!=null&&leftKeys[0]!=null){
+            String marks="，。？";String letters=editing?lettersFor(currentDigit()):null;
+            for(int i=0;i<3;i++){TextView k=leftKeys[i];if(k==null)continue;
+                if(letters!=null){k.setText(letters.substring(i,i+1));k.setContentDescription("字母 "+letters.charAt(i));}
+                else{k.setText(marks.substring(i,i+1));k.setContentDescription(marks.substring(i,i+1));}
+            }
+        }
+    }
+    private static char digitOf(char c){return "22233344455566677778889999".charAt(c-'a');}
+    private char currentDigit(){char d=lastDigit;if(composing.length()>0){char last=composing.charAt(composing.length()-1);if(last>='2'&&last<='9')d=last;else if(last>='a'&&last<='z')d=digitOf(last);}return d;}
+    private static String lettersFor(char digit){switch(digit){case '2':return "abc";case '3':return "def";case '4':return "ghi";case '5':return "jkl";case '6':return "mno";case '7':return "pqr";case '8':return "tuv";case '9':return "wxy";default:return "ghi";}}
+    private void appendLetter(String letter){
+        if(!chinese||symbols||sensitive)return;
+        InputConnection ic=getCurrentInputConnection();if(ic==null)return;
+        int n=composing.length();
+        char picked=letter.charAt(0);
+        if(n>0){char last=composing.charAt(n-1);
+            if(last>='2'&&last<='9')composing.setCharAt(n-1,picked);
+            else if(last>='a'&&last<='z'&&digitOf(last)==digitOf(picked))composing.setCharAt(n-1,picked);
+            else composing.append(picked);
+        }else composing.append(picked);
+        if(!t9Active()){displayed=composing.toString();ic.setComposingText(displayed,1);}
+        updateCandidates();
     }
     private void clearComposing(){
         displayed="";composing.setLength(0);acceptedText.setLength(0);acceptedSpelling.setLength(0);
