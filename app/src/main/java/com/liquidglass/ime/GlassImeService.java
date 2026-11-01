@@ -181,9 +181,9 @@ public final class GlassImeService extends InputMethodService {
         LinearLayout.LayoutParams blp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,h);blp.setMargins(0,gap,0,0);bottom.setLayoutParams(blp);
         keys.addView(bottom);
         addT9Bottom(bottom,"！",1.6f,false,()->punctuation("！"),null,"感叹号");
-        addT9Bottom(bottom,"符号",1.3f,false,this::showPunctuation,null,"中文标点");
-        addT9Bottom(bottom,"123",1.3f,false,()->{commitRaw();symbols=true;rebuildKeys();},null,"数字与符号");
-        addT9Bottom(bottom,"空格",2.2f,false,this::space,()->getSystemService(InputMethodManager.class).showInputMethodPicker(),"空格，拼音时选择首个候选词；长按切换输入法");
+        addT9Bottom(bottom,"符号",1.2f,false,this::showPunctuation,null,"中文标点");
+        addT9Bottom(bottom,"123",1.2f,false,()->{commitRaw();symbols=true;rebuildKeys();},null,"数字与符号");
+        addT9Bottom(bottom,"空格",2.4f,false,this::space,()->getSystemService(InputMethodManager.class).showInputMethodPicker(),"空格，拼音时选择首个候选词；长按切换输入法");
         addT9Bottom(bottom,"中/英",1.2f,false,()->{commitRaw();chinese=!chinese;rebuildKeys();updateCandidates();},()->getSystemService(InputMethodManager.class).showInputMethodPicker(),"切换中英文，长按选择输入法");
         addT9Bottom(bottom,"发送",2.1f,true,this::sendAction,null,"发送");
     }
